@@ -86,8 +86,8 @@ public:
    * @param normal_vector normal vector of the supporting plane 
    * @return true if pose is stable
    */
-  bool isPoseStable(const std::map<std::string, double>& joint_positions, FootSupport support_mode, const tf::Vector3& normal_vector);
-
+  bool isPoseStable(const std::map<std::string, double>& joint_positions, FootSupport support_mode, const tf::Vector3& normal_vector)const;
+  
   void scaleConvexHull(double scale);
 
   /// @return the support polygon (for visualization)
@@ -108,11 +108,14 @@ protected:
   /// Support polygon (x,y) for the left foot (mirrored from right)
   std::vector<tf::Point> foot_support_polygon_left_;
 
+  //以下の3つは視覚化用。TODO
   tf::Point p_com_;
-  std::vector<tf::Point> support_polygon_;
-  tf::Transform tf_to_support_;
-  std::string rfoot_mesh_link_name_;
+  //std::vector<tf::Point> support_polygon_;
+  //tf::Transform tf_to_support_;
 
+  std::string rfoot_mesh_link_name_;
+  std::string rfoot_link_name_;
+  
   //Convex Hull scaling factor
   double foot_polygon_scale_;
 };

@@ -17,11 +17,13 @@ find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})
 
 find_package(PCL REQUIRED QUIET COMPONENTS common surface)
 
+find_package(OpenCV REQUIRED)
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 catkin_package(
@@ -31,8 +33,10 @@ catkin_package(
   DEPENDS PCL
 )
 
+add_definitions ("-std=c++14")
+
 add_library(${PROJECT_NAME} src/TestStability.cpp src/Kinematics.cpp)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
 
 add_executable(test_stability src/test_stability.cpp)
 target_link_libraries(test_stability ${PROJECT_NAME})

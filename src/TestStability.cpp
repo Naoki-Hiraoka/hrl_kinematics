@@ -32,6 +32,7 @@
 #include "hrl_kinematics/TestStability.h"
 #include <pcl/surface/convex_hull.h>
 #include <pcl/point_types.h>
+#include <opencv2/opencv.hpp>
 
 using robot_state_publisher::SegmentPair;
 using boost::shared_ptr;
@@ -44,6 +45,7 @@ TestStability::TestStability(std::string rfoot_mesh_link_name,
                              double foot_polygon_scale)
   : Kinematics(root_link_name, rfoot_link_name, lfoot_link_name, urdf_model)
   , rfoot_mesh_link_name_(rfoot_mesh_link_name)
+  , rfoot_link_name_(rfoot_link_name)
 {
   //Build support polygon
   initFootPolygon(foot_polygon_scale);
@@ -59,7 +61,7 @@ bool TestStability::isPoseStable(const std::map<std::string, double>& joint_posi
 }
 
 bool TestStability::isPoseStable(const std::map<std::string, double>& joint_positions,
-                                 FootSupport support_mode, const tf::Vector3& normal_vector)
+                                 FootSupport support_mode, const tf::Vector3& normal_vector) const
 {
 
   tf::Vector3 upright_vector(0.0, 0.0, 1.0);
@@ -82,51 +84,52 @@ bool TestStability::isPoseStable(const std::map<std::string, double>& joint_posi
   computeCOM(joint_positions, com, m, tf_right_foot, tf_left_foot);
 
   tf::Transform tf_to_support;
-
+  std::vector<tf::Point> support_polygon;
   if (support_mode == SUPPORT_SINGLE_LEFT){
-    support_polygon_ = foot_support_polygon_left_;
-    tf_to_support_ = tf_left_foot;
+    support_polygon = foot_support_polygon_left_;
+    tf_to_support = tf_left_foot;
   } else { // RIGHT or DOUBLE
-    support_polygon_ = foot_support_polygon_right_;
-    tf_to_support_ = tf_right_foot;
+    support_polygon = foot_support_polygon_right_;
+    tf_to_support = tf_right_foot;
 
   }
 
   // rotate and project down
-  for (unsigned i = 0; i < support_polygon_.size(); ++i){
-    support_polygon_[i] = rotate_plane * support_polygon_[i];
+  for (unsigned i = 0; i < support_polygon.size(); ++i){
+    support_polygon[i] = rotate_plane * support_polygon[i];
   }
 
   // append left if double support:
   if (support_mode == SUPPORT_DOUBLE){
     tf::Transform tf_right_to_left = tf_right_foot.inverseTimes(tf_left_foot);
     for (unsigned i = 0; i < foot_support_polygon_left_.size(); ++i){
-      support_polygon_.push_back(rotate_plane * tf_right_to_left * foot_support_polygon_left_[i]);
+      support_polygon.push_back(rotate_plane * tf_right_to_left * foot_support_polygon_left_[i]);
     }
-    support_polygon_ = convexHull(support_polygon_);
+    support_polygon = convexHull(support_polygon);
   }
-  if (support_polygon_.size() <= 2)
+  if (support_polygon.size() <= 2)
     return false;
 
   // projected com in support frame, rotated around support plane:
-  p_com_ = rotate_plane * tf_to_support_.inverse() * com;
-  p_com_.setZ(0.0);
+  tf::Point p_com;
+  p_com = rotate_plane * tf_to_support.inverse() * com;
+  p_com.setZ(0.0);
 
-  return pointInConvexHull(p_com_, support_polygon_);
+  return pointInConvexHull(p_com, support_polygon);
 }
 
 geometry_msgs::PolygonStamped TestStability::getSupportPolygon() const{
   geometry_msgs::PolygonStamped footprint_poly;
-  footprint_poly.header.frame_id = root_link_name_;
-  footprint_poly.header.stamp = ros::Time::now();
-  for (unsigned i=0; i < support_polygon_.size(); ++i){
-    geometry_msgs::Point32 p;
-    tf::Point tfP = tf_to_support_ * support_polygon_[i];
-    p.x = tfP.x();
-    p.y = tfP.y();
-    p.z = tfP.z();
-    footprint_poly.polygon.points.push_back(p);
-  }
+  // footprint_poly.header.frame_id = root_link_name_;
+  // footprint_poly.header.stamp = ros::Time::now();
+  // for (unsigned i=0; i < support_polygon_.size(); ++i){
+  //   geometry_msgs::Point32 p;
+  //   tf::Point tfP = tf_to_support_ * support_polygon_[i];
+  //   p.x = tfP.x();
+  //   p.y = tfP.y();
+  //   p.z = tfP.z();
+  //   footprint_poly.polygon.points.push_back(p);
+  // }
 
   return footprint_poly;
 }
@@ -134,18 +137,18 @@ geometry_msgs::PolygonStamped TestStability::getSupportPolygon() const{
 visualization_msgs::Marker TestStability::getCOMMarker() const{
 
   visualization_msgs::Marker com_marker;
-  com_marker.header.stamp = ros::Time::now();
-  com_marker.header.frame_id = root_link_name_;
-  com_marker.action = visualization_msgs::Marker::ADD;
-  com_marker.type = visualization_msgs::Marker::SPHERE;
-  tf::pointTFToMsg(tf_to_support_ * p_com_, com_marker.pose.position);
-  tf::quaternionTFToMsg(tf_to_support_.getRotation(), com_marker.pose.orientation);
-  com_marker.scale.x = 0.03;
-  com_marker.scale.y = 0.03;
-  com_marker.scale.z = 0.005;
-  com_marker.color.a = 1.0;
-  com_marker.color.g = 1.0;
-  com_marker.color.r = 0.0;
+  // com_marker.header.stamp = ros::Time::now();
+  // com_marker.header.frame_id = root_link_name_;
+  // com_marker.action = visualization_msgs::Marker::ADD;
+  // com_marker.type = visualization_msgs::Marker::SPHERE;
+  // tf::pointTFToMsg(tf_to_support_ * p_com_, com_marker.pose.position);
+  // tf::quaternionTFToMsg(tf_to_support_.getRotation(), com_marker.pose.orientation);
+  // com_marker.scale.x = 0.03;
+  // com_marker.scale.y = 0.03;
+  // com_marker.scale.z = 0.005;
+  // com_marker.color.a = 1.0;
+  // com_marker.color.g = 1.0;
+  // com_marker.color.r = 0.0;
 
 
   return com_marker;
@@ -154,39 +157,69 @@ visualization_msgs::Marker TestStability::getCOMMarker() const{
 std::vector<tf::Point> TestStability::convexHull(const std::vector<tf::Point>& points) const{
   std::vector<tf::Point> hull;
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_points(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PointCloud<pcl::PointXYZ> chull_points;
-  pcl::ConvexHull<pcl::PointXYZ> chull;
+  //NOT thread safe
+  
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_points(new pcl::PointCloud<pcl::PointXYZ>);
+  // pcl::PointCloud<pcl::PointXYZ> chull_points;
+  // pcl::ConvexHull<pcl::PointXYZ> chull;
+
+  // if (points.empty()){
+  //   ROS_ERROR("convexHull on empty set of points!");
+  //   return hull;
+  // }
+
+  // for (unsigned i = 0; i < points.size(); ++i){
+  //   pcl_points->points.push_back(pcl::PointXYZ(points[i].x(), points[i].y(), 0.0));
+  // }
+
+  // chull.setDimension(2);
+  // chull.setInputCloud(pcl_points);
+  // std::vector<pcl::Vertices> polygons;
+  // chull.reconstruct(chull_points, polygons);
+
+  // if (polygons.size() == 0){
+  //   ROS_ERROR("Convex hull polygons are empty");
+  //   return hull;
+  // } else if (polygons.size() > 1){
+  //   ROS_WARN("Convex hull polygons are larger than 1");
+  // }
+
+  // for (unsigned i = 0; i < polygons[0].vertices.size(); ++i){
+  //   int idx = polygons[0].vertices[i];
+  //   tf::Point p(chull_points.points[idx].x,
+  //               chull_points.points[idx].y,
+  //               chull_points.points[idx].z);
+  //   hull.push_back(p);
+  // }
 
   if (points.empty()){
     ROS_ERROR("convexHull on empty set of points!");
     return hull;
   }
-
+  
+  std::vector<cv::Point2f> cvpoints{};
   for (unsigned i = 0; i < points.size(); ++i){
-    pcl_points->points.push_back(pcl::PointXYZ(points[i].x(), points[i].y(), 0.0));
+    cvpoints.push_back(cv::Point2d{points[i].x(), points[i].y()});
   }
-
-  chull.setDimension(2);
-  chull.setInputCloud(pcl_points);
-  std::vector<pcl::Vertices> polygons;
-  chull.reconstruct(chull_points, polygons);
-
-  if (polygons.size() == 0){
+  std::vector<cv::Point2f> cvhull{};
+  //ROS_ERROR_STREAM(cvpoints.size());
+  //for(auto& point: cvpoints){
+  //  ROS_ERROR_STREAM(point.x<<" "<<point.y);
+  //}
+  cv::convexHull(cvpoints,cvhull);
+  
+  if (cvhull.size() == 0){
     ROS_ERROR("Convex hull polygons are empty");
     return hull;
-  } else if (polygons.size() > 1){
-    ROS_WARN("Convex hull polygons are larger than 1");
   }
 
-  for (unsigned i = 0; i < polygons[0].vertices.size(); ++i){
-    int idx = polygons[0].vertices[i];
-    tf::Point p(chull_points.points[idx].x,
-                chull_points.points[idx].y,
-                chull_points.points[idx].z);
+  for (unsigned i = 0; i < cvhull.size(); ++i){
+    tf::Point p(cvhull[i].x,
+                cvhull[i].y,
+                0.0);
     hull.push_back(p);
   }
-
+  
   return hull;
 }
 
@@ -256,80 +289,118 @@ bool TestStability::loadFootPolygon(){
     return false;
   }
 
+  //meshlink座標系->foot座標系
+  tf::Transform mesh2foot ;
+  if(rfoot_mesh_link_name_!=rfoot_link_name_){
+    boost::shared_ptr<const urdf::Link> notmesh_foot_link = urdf_model_->getLink(rfoot_link_name_);
+    assert(notmesh_foot_link);
+    if(notmesh_foot_link->getParent()->name!=foot_link->name || notmesh_foot_link->parent_joint->type!=urdf::Joint::FIXED){
+      ROS_ERROR_STREAM("only one fixed joint is available between mesh link and fot link");
+      return false;
+    }
+    mesh2foot=tf::Transform(tf::Quaternion(notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.rotation.x,
+					   notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.rotation.y,
+					   notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.rotation.z,
+					   notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.rotation.w),
+			    tf::Vector3(notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.position.x,
+					notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.position.y,
+					notmesh_foot_link->parent_joint->parent_to_joint_origin_transform.position.z));
+  }else{
+    mesh2foot=tf::Transform(tf::Quaternion(0.0,
+					   0.0,
+					   0.0,
+					   1.0),
+			    tf::Vector3(0.0,
+					0.0,
+					0.0));
+  }
+  
+  //meshlink座標系->geometry座標系
   tf::Pose geom_origin = tf::Pose(tf::Transform(tf::Quaternion(geom_pose.rotation.x, geom_pose.rotation.y, geom_pose.rotation.z, geom_pose.rotation.w),
                                               tf::Vector3(geom_pose.position.x, geom_pose.position.y, geom_pose.position.z)));
 
-  if (geom->type != urdf::Geometry::MESH){
-    ROS_ERROR_STREAM("Geometry for link "<< rfoot_mesh_link_name_ << " is not a mesh");
-    return false;
-  } else {
+  //Vector storing the original foot points
+  std::vector<tf::Point> foot_SP_right;
+  if (geom->type == urdf::Geometry::MESH){
     shared_ptr<const urdf::Mesh> mesh = boost::dynamic_pointer_cast<const urdf::Mesh>(geom);
 
     const Eigen::Vector3d scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
     shapes::Mesh* shape_mesh = shapes::createMeshFromResource(mesh->filename, scale);
     size_t vertex_count = shape_mesh->vertex_count;
-
-    //Vector storing the original foot points
-    std::vector<tf::Point> foot_SP_right;
+    
     for (unsigned int i = 0 ; i < vertex_count ; ++i)
     {
       unsigned int i3 = i * 3;
 
       tf::Point p(shape_mesh->vertices[i3], shape_mesh->vertices[i3 + 1], shape_mesh->vertices[i3 + 2]); // proj down (z=0)
-      tf::Point projectedP = geom_origin*p;
+      tf::Point projectedP = mesh2foot.inverse()*geom_origin*p;
       projectedP.setZ(0.0);
       // transform into local foot frame:
       //foot_support_polygon_right_.push_back(projectedP);
       foot_SP_right.push_back(projectedP);
     }
-
-    //Compute foot center point w.r.t local frame
-    float sum_x_coord = 0.0;
-    float sum_y_coord = 0.0;
-    tf::Point r_foot_center;
-    for (unsigned int i = 0 ; i < foot_SP_right.size(); ++i)
+  } else if (geom->type == urdf::Geometry::BOX){
+    shared_ptr<const urdf::Box> box = boost::dynamic_pointer_cast<const urdf::Box>(geom);
+    for(double x=-0.5;x<=0.5;x+=1){
+      for(double y=-0.5;y<=0.5;y+=1){
+	for(double z=-0.5;z<=0.5;z+=1){
+	  tf::Point p{box->dim.x*x,box->dim.y*y,box->dim.z*z};
+	  tf::Point projectedP= mesh2foot.inverse()*geom_origin*p;
+	  foot_SP_right.push_back(projectedP);
+	}
+      }
+    }
+  }else{
+    ROS_ERROR_STREAM("Geometry for link "<< rfoot_mesh_link_name_ << " is not a mesh or a box");
+    return false;
+  } 
+  
+  //Compute foot center point w.r.t local frame
+  float sum_x_coord = 0.0;
+  float sum_y_coord = 0.0;
+  tf::Point r_foot_center;
+  for (unsigned int i = 0 ; i < foot_SP_right.size(); ++i)
     {
-    	sum_x_coord = sum_x_coord + foot_SP_right[i].x();
-    	sum_y_coord = sum_y_coord + foot_SP_right[i].y();
+      sum_x_coord = sum_x_coord + foot_SP_right[i].x();
+      sum_y_coord = sum_y_coord + foot_SP_right[i].y();
     }
-    //X and Y of right foot center
-    r_foot_center.setX(sum_x_coord/foot_SP_right.size());
-    r_foot_center.setY(sum_y_coord/foot_SP_right.size());
-
-    //Vector storing foot points w.r.t foot center
-    std::vector<tf::Point> foot_SP_right_center;
-    tf::Point foot_point;
-    for (unsigned int i = 0 ; i < foot_SP_right.size(); ++i){
-      //Express point w.r.t foot center and directly apply scaling
-      foot_point.setX( (foot_SP_right[i].x() - r_foot_center.x()) * foot_polygon_scale_ );
-      foot_point.setY( (foot_SP_right[i].y() - r_foot_center.y()) * foot_polygon_scale_ );
-      foot_SP_right_center.push_back(foot_point);
-    }
-
-    //Express new(scaled) coordinates in local frame
-    std::vector<tf::Point> scaled_SP_right;
-    for (unsigned int i = 0 ; i < foot_SP_right_center.size() ; ++i){
-      //Express point w.r.t foot center and directly apply scaling
-      foot_point.setX( foot_SP_right_center[i].x() + r_foot_center.x() ) ;
-      foot_point.setY( foot_SP_right_center[i].y() + r_foot_center.y() ) ;
-      scaled_SP_right.push_back(foot_point);
-    }
-
-
-    //std::cout<<"Num points"<<scaled_SP_right.size()<<std::endl;
-
-    //Without scaling
-    //foot_support_polygon_right_ = convexHull(foot_support_polygon_right_);
-    //foot_support_polygon_right_ = convexHull(foot_SP_right);
-
-    //With scaling
-    foot_support_polygon_right_ = convexHull(scaled_SP_right);
-
+  //X and Y of right foot center
+  r_foot_center.setX(sum_x_coord/foot_SP_right.size());
+  r_foot_center.setY(sum_y_coord/foot_SP_right.size());
+  
+  //Vector storing foot points w.r.t foot center
+  std::vector<tf::Point> foot_SP_right_center;
+  tf::Point foot_point;
+  for (unsigned int i = 0 ; i < foot_SP_right.size(); ++i){
+    //Express point w.r.t foot center and directly apply scaling
+    foot_point.setX( (foot_SP_right[i].x() - r_foot_center.x()) * foot_polygon_scale_ );
+    foot_point.setY( (foot_SP_right[i].y() - r_foot_center.y()) * foot_polygon_scale_ );
+    foot_SP_right_center.push_back(foot_point);
   }
-
+  
+  //Express new(scaled) coordinates in local frame
+  std::vector<tf::Point> scaled_SP_right;
+  for (unsigned int i = 0 ; i < foot_SP_right_center.size() ; ++i){
+    //Express point w.r.t foot center and directly apply scaling
+    foot_point.setX( foot_SP_right_center[i].x() + r_foot_center.x() ) ;
+    foot_point.setY( foot_SP_right_center[i].y() + r_foot_center.y() ) ;
+    scaled_SP_right.push_back(foot_point);
+  }
+  
+  
+  //std::cout<<"Num points"<<scaled_SP_right.size()<<std::endl;
+  
+  //Without scaling
+  //foot_support_polygon_right_ = convexHull(foot_support_polygon_right_);
+  //foot_support_polygon_right_ = convexHull(foot_SP_right);
+  
+  //With scaling
+  foot_support_polygon_right_ = convexHull(scaled_SP_right);
+  
   ROS_DEBUG("Foot polygon loaded with %zu points", foot_support_polygon_right_.size());
-
+  
   return true;
+    
 
 }
 

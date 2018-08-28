@@ -96,7 +96,7 @@ public:
    * @param[out] tf_left_foot returned transformation from body reference frame to left foot
    */
   void computeCOM(const JointMap& joint_positions, tf::Point& com, double& mass,
-                  tf::Transform& tf_right_foot, tf::Transform& tf_left_foot);
+                  tf::Transform& tf_right_foot, tf::Transform& tf_left_foot) const;
 
 
   protected:
@@ -104,7 +104,7 @@ public:
   void addChildren(const KDL::SegmentMap::const_iterator segment);
 
   void computeCOMRecurs(const KDL::SegmentMap::const_iterator& currentSeg, const std::map<std::string, double>& joint_positions,
-                        const KDL::Frame& tf, KDL::Frame& tf_right_foot, KDL::Frame& tf_left_foot, double& m, KDL::Vector& cog);
+                        const KDL::Frame& tf, KDL::Frame& tf_right_foot, KDL::Frame& tf_left_foot, double& m, KDL::Vector& cog) const;
   void createCoGMarker(const std::string& ns, const std::string& frame_id, double radius, const KDL::Vector& cog, visualization_msgs::Marker& marker) const;
 
   boost::shared_ptr<const urdf::ModelInterface> urdf_model_;
